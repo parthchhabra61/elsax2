@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ELSA-X2 Telemetry GUI</title>
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="telemetry-container">
+        <div class="tile" id="servoAnglesTile">
+            <h3>Servo Angles</h3>
+            <p>Servo 1: <span id="servo1Value">0</span>&deg;</p>
+            <p>Servo 2: <span id="servo2Value">0</span>&deg;</p>
+            <p>Servo 3: <span id="servo3Value">0</span>&deg;</p>
+        </div>
+        <div class="tile chart-container" style="display: none;">
+            <h3>Roll and Pitch</h3>
+            <canvas id="rollPitchChart"></canvas>
+        </div>
+        <div class="tile" id="edfSpeedTile">
+            <h3>EDF Speed</h3>
+                <div class="meter-container">
+        <div class="meter">
+            <svg viewBox="0 0 36 36" class="circular-meter">
+                <path class="circle-bg" d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+                <path id="circle-progress" class="circle" d="M18 2.0845
+                    a 15.9155 15.9155 0 0 1 0 31.831
+                    a 15.9155 15.9155 0 0 1 0 -31.831"
+                />
+            </svg>
+            <div id="meter-value" class="meter-text"> <span id="edfSpeedValue">0</span>%</div>
+        </div>
+    </div>
+        </div>
+        <div class="tile threejs-container" id="threejsContainer">
+            <h3>Rocket Orientation</h3>
+        </div>
+        <div class="tile threejs-container" id="coneThreejsContainer">
+            <h3>Cone Orientation</h3>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            setInterval(fetchData, 50);  // Fetch data every 50ms
+            setInterval(updateChart, 500); // Update chart every 500ms
+        });
+
+        let latestJsonData = null;
+
+        // Fetch data from local JSON file
+        async function fetchData() {
+            try {
+                const response = await fetch('data.json');
+                if (!response.ok) {
+                    throw new Error('Network response was not ok: ' + response.statusText);
+                }
+                latestJsonData = await response.json();
+                updateTelemetry(latestJsonData);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        }
+
+        // Update telemetry data
+        function updateTelemetry(jsonData) {
+            if (!jsonData) return;
+
+            // Servo Values Update
+            document.getElementById('servo1Value').innerText = jsonData.servo1;
+            document.getElementById('servo2Value').innerText = jsonData.servo2;
+            document.getElementById('servo3Value').innerText = jsonData.servo3;
+
+            // EDF Speed Update
+            document.getElementById('edfSpeedValue').innerText = jsonData.edfSpeed;
+
+            // Update 3D models immediately
+            update3DModels(jsonData);
+        }
+
+        // Chart update throttled to 500ms
+        function updateChart() {
+            if (!latestJsonData) return;
+
+            const currentTime = new Date().toLocaleTimeString();
+            rollPitchChart.data.labels.push(currentTime);
+            if (rollPitchChart.data.labels.length > 10) {
+                rollPitchChart.data.labels.shift();
+                rollPitchChart.data.datasets[0].data.shift();
+                rollPitchChart.data.datasets[1].data.shift();
+            }
+            rollPitchChart.data.datasets[0].data.push(latestJsonData.roll);
+            rollPitchChart.data.datasets[1].data.push(latestJsonData.pitch);
+            rollPitchChart.update();
+        }
+
+        // Roll and Pitch Chart
+        const rollPitchChartCtx = document.getElementById('rollPitchChart').getContext('2d');
+        const rollPitchChart = new Chart(rollPitchChartCtx, {
+            type: 'line',
+            data: {
+                labels: [],
+                datasets: [
+                    {
+                        label: 'Roll',
+                        data: [],
+                        borderColor: 'rgba(255, 99, 132, 0.7)',
+                        borderWidth: 2,
+                        fill: false
+                    },
+                    {
+                        label: 'Pitch',
+                        data: [],
+                        borderColor: 'rgba(54, 162, 235, 0.7)',
+                        borderWidth: 2,
+                        fill: false
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                scales: {
+                    x: {
+                        type: 'category',
+                        ticks: {
+                            maxRotation: 0
+                        }
+                    },
+                    y: {
+                        beginAtZero: true,
+                        max: 360
+                    }
+                }
+            }
+        });
+
+        // Three.js Visualization Setup
+        function createScene(containerId) {
+            const scene = new THREE.Scene();
+            const camera = new THREE.PerspectiveCamera(75, 1, 0.1, 1000);
+            const renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(300, 300);
+            document.getElementById(containerId).appendChild(renderer.domElement);
+            renderer.setClearColor(0x1a1a1a, 1);
+
+            // Lighting
+            const ambientLight = new THREE.AmbientLight(0x404040);
+            scene.add(ambientLight);
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+            directionalLight.position.set(5, 5, 5).normalize();
+            scene.add(directionalLight);
+
+            return { scene, camera, renderer };
+        }
+
+        // Rocket Scene Setup
+        const rocketSetup = createScene('threejsContainer');
+        const rocketGeometry = new THREE.CylinderGeometry(0.7, 0.7, 3, 32);
+        const rocketMaterial = new THREE.MeshPhongMaterial({ color: 0xff0000 });
+        const rocket = new THREE.Mesh(rocketGeometry, rocketMaterial);
+        rocketSetup.scene.add(rocket);
+        rocketSetup.camera.position.z = 10;
+
+        function animateRocket() {
+            requestAnimationFrame(animateRocket);
+            rocketSetup.renderer.render(rocketSetup.scene, rocketSetup.camera);
+        }
+        animateRocket();
+
+        // Cone Scene Setup
+        const coneSetup = createScene('coneThreejsContainer');
+        const coneGeometry = new THREE.ConeGeometry(0.7, 3, 32);
+        const coneMaterial = new THREE.MeshPhongMaterial({ color: 0x00ff00 });
+        const cone = new THREE.Mesh(coneGeometry, coneMaterial);
+        coneSetup.scene.add(cone);
+        coneSetup.camera.position.z = 10;
+
+        function animateCone() {
+            requestAnimationFrame(animateCone);
+            coneSetup.renderer.render(coneSetup.scene, coneSetup.camera);
+        }
+        animateCone();
+
+        // Update 3D Models
+        function update3DModels(jsonData) {
+            // Update Rocket Rotation
+            rocket.rotation.x = THREE.MathUtils.degToRad(jsonData.pitch);
+            rocket.rotation.z = THREE.MathUtils.degToRad(jsonData.roll);
+
+            // Update Cone Rotation
+            cone.rotation.x = THREE.MathUtils.degToRad(jsonData.cone_pitch);
+            cone.rotation.z = THREE.MathUtils.degToRad(jsonData.cone_roll);
+        }
+    </script>
+</body>
+</html>
+
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 0;
+        padding: 0;
+        background-color: #1a1a1a;
+        color: #e0e0e0;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+    }
+    .telemetry-container {
+        display: grid;
+        grid-template-columns: repeat(2, 1fr);
+        gap: 70px;
+        width: 90%;
+        max-width: 1000px;
+        align-items: stretch;
+        justify-items: center;
+    }
+    .tile, .chart-container, .threejs-container {
+        background-color: #333;
+        border-radius: 10px;
+        padding: 20px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        width: 100%;
+    }
+    .tile {
+        text-align: center;
+    }
+    .threejs-container {
+        height: 400px;
+        width: 100%;
+    }
+    canvas {
+        background-color: #1a1a1a;
+        max-width: 100%;
+        height: auto;
+    }
+
+    .meter {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+    }
+    .circular-meter {
+        width: 100%;
+        height: 100%;
+        transform: rotate(-90deg);
+    }
+    .circle-bg {
+        fill: none;
+        stroke: #e6e6e6;
+        stroke-width: 2.8;
+    }
+    .circle {
+        fill: none;
+        stroke-width: 2.8;
+        stroke-linecap: round;
+        stroke: #00abf3;
+        stroke-dasharray: 100, 100;
+        transition: stroke-dasharray 0.3s ease, stroke 0.3s ease;
+    }
+    .meter-text {
+        position: absolute;
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: #e0e0e0;
+    }
+</style>
+
+<script>
+    const meterValue = document.getElementById("meter-value");
+const circleProgress = document.getElementById("circle-progress");
+
+function setMeter(value) {
+    const percentage = Math.min(Math.max(value, 0), 100);
+    const offset = 100 - percentage;
+
+    circleProgress.style.strokeDasharray = `${percentage}, 100`;
+    meterValue.textContent = `${percentage}%`;
+
+    // Change color based on value
+    if (percentage > 70) {
+        circleProgress.style.stroke = "#e63946"; // red for high values
+    } else if (percentage > 40) {
+        circleProgress.style.stroke = "#f4a261"; // orange for medium values
+    } else {
+        circleProgress.style.stroke = "#2a9d8f"; // green for low values
+    }
+}
+
+// Fetch data from local JSON file
+async function fetchData() {
+    try {
+        const response = await fetch('data.json');
+        if (!response.ok) {
+            throw new Error('Network response wasnt okay: ' + response.statusText);
+        }
+        latestJsonData = await response.json();
+        updateTelemetry(latestJsonData);
+    } catch (error) {
+        console.error('Error fetching data:', error);
+    }
+}
+
+// Update telemetry data
+function updateTelemetry(jsonData) {
+    if (!jsonData) return;
+
+    // Servo Values Update
+    document.getElementById('servo1Value').innerText = jsonData.servo1;
+    document.getElementById('servo2Value').innerText = jsonData.servo2;
+    document.getElementById('servo3Value').innerText = jsonData.servo3;
+
+    // Update EDF Speed Meter
+    setMeter(jsonData.edfSpeed);
+
+    // Update 3D models immediately
+    update3DModels(jsonData);
+}
+</script>

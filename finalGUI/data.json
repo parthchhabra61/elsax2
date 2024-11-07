@@ -1,0 +1,10 @@
+{
+    "servo1": 45,
+    "servo2": 90,
+    "servo3": 182,
+    "edfSpeed": 10,
+    "roll": 40,
+    "pitch": 15,
+    "cone_roll": 20,
+    "cone_pitch": 10
+  }
