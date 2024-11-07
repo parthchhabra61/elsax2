@@ -1,8 +1,12 @@
-lsaX2 - Real-Time 3D Telemetry Visualization
-Overview
+🚀🚀 ElsaX2 - Real-Time 3D Telemetry Visualization 🚀🚀
+
+
+✨ Overview ✨
+
 elsaX2 is a cutting-edge real-time telemetry visualization project designed to transmit and display live telemetry data from an ESP32 microcontroller to a Raspberry Pi 4 over Wi-Fi. The project is specifically developed to display roll, pitch, cone_roll, and cone_pitch values on an interactive, locally-hosted website. This visualization includes dynamic 3D models and real-time data charts, making it a powerful tool for aerospace telemetry analysis and monitoring.
 
-Features
+✨ Features ✨
+
 Real-Time Telemetry Transmission: Data from ESP32 is transmitted to Raspberry Pi 4 with a latency of under 1 second.
 3D Model Visualization:
 Two custom 3D models (.obj format) display live roll and pitch movements.
@@ -16,7 +20,8 @@ Servo values column for actuator control insights.
 Serial monitor for real-time serial data.
 Locally Hosted Website: Displays telemetry values on a webpage hosted on the Raspberry Pi 4, enabling easy access to live monitoring and data visualization.
 
-Usage
+✨ Usage ✨
+
 Power on the ESP32 and Raspberry Pi 4.
 Connect to the Raspberry Pi’s locally hosted site to view live telemetry data.
 Use the GUI to monitor:
